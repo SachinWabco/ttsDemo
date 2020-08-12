@@ -10,7 +10,8 @@ const initialState = {
     readText: false
 }
 const ttsReducer = (state = initialState, action)=>{
-
+    console.log("inside reducer")
+    console.log(state)
     if(action.type === UPDATE_SELECTED_VOICE){
         return Object.assign(
             {}, state, {selectedVoice: action.payload}

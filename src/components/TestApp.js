@@ -14,9 +14,9 @@ import Slider from '@react-native-community/slider';
 import { useSelector, useDispatch, memo} from 'react-redux';
 // import store from '../redux/store';
 import TextToSpeech from '../components/modules/textToSpeech';
-import { UPDATE_SELECTED_VOICE, UPDATE_DEFAULT_LANGUAGE, UPDATE_VOICES, UPDATE_READ_TEXT } from '../redux/constants';
+import { UPDATE_SELECTED_VOICE, UPDATE_DEFAULT_LANGUAGE, UPDATE_VOICES, UPDATE_READ_TEXT, UPDATE_SPEECH_PITCH, UPDATE_SPEECH_RATE } from '../redux/constants';
 
-export const TestApp = memo(() => {
+const TestApp = () => {
   console.log("Inside TestApp");
     const ttsStore = useSelector(store=> store);
     const dispatch = useDispatch();
@@ -27,14 +27,17 @@ export const TestApp = memo(() => {
     const [speechPitch, setSpeechPitch] = useState(ttsStore.speechPitch);
     const [text, setText] = useState("Hey John. Please deliver the package by 6:00 PM");
     const [defaultLanguage, setDefaultLanguage] = useState(null);
-    const [ttsStatus, setTtsStatus] = useState(ttsStore.ttsStatus);
+    // const [ttsStatus, setTtsStatus] = useState(ttsStore.ttsStatus);
     const [readText, setReadText] = useState(ttsStore.readText);
+    console.log(readText);
     
     const onVoicePress = voice => {
             setDefaultLanguage(voice.language);
             dispatch({type: UPDATE_DEFAULT_LANGUAGE, payload: voices.language});
             setSelectedVoice(voice.id );
             dispatch({type: UPDATE_SELECTED_VOICE, payload: voice.id});
+            setReadText(false);
+            dispatch({type:UPDATE_READ_TEXT,payload:false})
     };
 
     const renderVoiceItem = ({ item }) => {
@@ -75,26 +78,35 @@ export const TestApp = memo(() => {
           return { id: v.id, name: v.name, language: v.language };
           });
       setVoices(availableVoices); 
+      console.log("Display total voices supported by tts library");
+      console.log(ttsVoices);
       dispatch({type: UPDATE_VOICES, payload: availableVoices})
     }
 
     const readTextToSpeech = () =>{
       setReadText(true);
-      // dispatch({type: UPDATE_READ_TEXT, payload: true})
+      dispatch({type: UPDATE_READ_TEXT, payload: true})
     } 
 
     useEffect(()=>{
         Tts.getInitStatus().then(initTts);
     },[])
 
+    useEffect(()=>{
+      if(ttsStore.ttsStatus === 'finished'){
+        setReadText(false)
+      }
+
+    },[ttsStore.ttsStatus])
+
     const textToSpeechProps = {
       selectedVoice,
       voices,
       text,
       defaultLanguage,
-      speechPitch,
-      speechRate,
-      ttsStatus
+      speechPitch: ttsStore.speechPitch,
+      speechRate: ttsStore.speechRate,
+      ttsStatus: ttsStore.ttsStatus
     }
 
     return (
@@ -137,7 +149,7 @@ export const TestApp = memo(() => {
             />
             <TouchableOpacity style={styles.button} onPress={readTextToSpeech}>
             <Text>
-                Click to Read Text ({`Status: ${ttsStatus || ''}`})
+                Click to Read Text ({`Status: ${ttsStore.ttsStatus || ''}`})
                 {readText ? <TextToSpeech {...textToSpeechProps}/>: null}
             </Text>
             </TouchableOpacity>
@@ -151,7 +163,7 @@ export const TestApp = memo(() => {
             />
         </View>
     )
-});
+};
 
 const styles = StyleSheet.create({
   container: {
