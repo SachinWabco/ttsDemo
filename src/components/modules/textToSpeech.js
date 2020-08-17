@@ -1,7 +1,20 @@
-import React , { useState, useRef, useEffect, memo }from 'react';
-import Tts from 'react-native-tts';
+import React , { useState, useRef, useEffect }from 'react';
 import { useSelector, useDispatch } from 'react-redux';
-import { UPDATE_SPEECH_RATE, UPDATE_SPEECH_PITCH, UPDATE_SELECTED_VOICE, UPDATE_VOICES, UPDATE_DEFAULT_LANGUAGE, UPDATE_TTS_STATUS, UPDATE_READ_TEXT } from '../../redux/constants';
+import Tts from 'react-native-tts';
+import { Platform , AppState } from 'react-native';
+import { 
+    UPDATE_SPEECH_RATE,
+    UPDATE_SPEECH_PITCH,
+    UPDATE_SELECTED_VOICE, 
+    UPDATE_VOICES, 
+    UPDATE_DEFAULT_LANGUAGE, 
+    UPDATE_TTS_STATUS, 
+    UPDATE_READ_TEXT, 
+    GET_VOICES, 
+    STARTED,
+    FINISHED,
+    CANCELLED} from '../../redux/constants';
+import { updateVoices, updateReadText, updateTtsStatus , updateIsSpeechCancelled, updateIsGoogleTtsEngineDefault } from '../../redux/action';
 
 const useComponentWillMount = func => {
     const willMount = useRef(true);
@@ -16,8 +29,14 @@ const useComponentWillMount = func => {
 const useComponentDidMount = func => useEffect(func, []);
 
 const textToSpeech = (props) => {
-    console.log("inside textToSpeech Module")
-    console.log(props);
+    const appState = useRef(AppState.currentState);
+    const [appStateVisible, setAppStateVisible] = useState(AppState.currentState);
+  
+    // console.log("inside textToSpeech Module")
+    // console.log("props for textToSpeech")
+    // console.log(props);
+    // console.log("TTS Engines");
+    // console.log("====================")
     const ttsStore = useSelector(store => store);
     const dispatch = useDispatch();
     // const { ttsStatus, voices, selectedVoice, speechPitch, speechRate, text } = props;
@@ -28,104 +47,103 @@ const textToSpeech = (props) => {
     const [speechPitch,setSpeechPitch] = useState(props.speechPitch || ttsStore.speechPitch);
     const [text,setText] = useState(props.text || "Hey John. Please deliver the package by 6:00 PM");
     const [defaultLanguage, setDefaultLanguage] = useState(props.defaultLanguage || ttsStore.defaultLanguage);
+    // const [isSpeechCancelled, setIsSpeechCancelled] = useState(props.isSpeechCancel || ttsStore.isSpeechCancel);
 
-    useComponentWillMount(()=>{
+    useComponentWillMount(async()=>{
         console.log("Inside textToSpeech component will mount");
         Tts.addEventListener('tts-start', event =>{
-            // setTtsStatus('started')
-            dispatch({type: UPDATE_TTS_STATUS, payload: 'started'})
-            dispatch({type: UPDATE_READ_TEXT,payload: true})
+           dispatch(updateTtsStatus(STARTED));
         });
         
         Tts.addEventListener('tts-finish', event =>{
-            // setTtsStatus('finished')
-            dispatch({type: UPDATE_TTS_STATUS, payload: 'finished'})
-            dispatch({type: UPDATE_READ_TEXT,payload: false})
+            dispatch(updateTtsStatus(FINISHED));
         });
         
         Tts.addEventListener('tts-cancel', event =>{
-            // setTtsStatus('cancelled')
-            dispatch({type: UPDATE_TTS_STATUS, payload: 'cancelled'})
-            dispatch({type: UPDATE_READ_TEXT,payload: false})
+            dispatch(updateTtsStatus(CANCELLED));
         });
 
         Tts.setDefaultRate(speechRate);
         Tts.setDefaultPitch(speechPitch);
-        Tts.getInitStatus().then(initTts);
+        dispatch({type: GET_VOICES});
+        const engines = await Tts.engines();
+        // console.log(engines);
+        const isGoogleTTSEngine = engines.filter(engine => engine.name === 'com.google.android.tts' && engine.default === true)
+        if(Platform.OS === 'android' && isGoogleTTSEngine.length === 0){
+            dispatch(updateIsGoogleTtsEngineDefault(true));
+            Tts.requestInstallEngine();
+        }
     });
 
     useEffect(()=>{
+        if(ttsStore.ttsStatus === CANCELLED ){
+          Tts.stop();
+        }
+      },[ttsStore.ttsStatus])
+
+    const handleAppStateChange = (state) => {
+        // console.log(state)
+        if(state === 'background' && ttsStore.isBackGroundSpeechCancelled){
+            Tts.stop();
+        }
+    }
+
+    useEffect(()=>{
+        AppState.addEventListener("change", handleAppStateChange);
+
         return ()=>{
-            // Tts.removeAllListeners();
             Tts.removeEventListener('tts-start');
             Tts.removeEventListener('tts-cancel');
             Tts.removeEventListener('tts-finish');
+            AppState.removeEventListener("change", handleAppStateChange);
         }
     },[])
 
-    const initTts = async () => {
-
-        if (voices && voices.length > 0) {
-        try {
+    const readText = async() => {
+        console.log(props)
+        console.log("inside tts useeffect");
+        if(!props.readText){
+            // Tts.stop();
+            return
+        }
+        if(props.isSpeechCancelled){
+            Tts.stop();
+            dispatch(updateIsSpeechCancelled(false));
+            return
+        }
+      
+        try{
             await Tts.setDefaultLanguage(defaultLanguage);
-            dispatch({type: UPDATE_DEFAULT_LANGUAGE, payload: defaultLanguage})
-        } catch (err) {
+            dispatch({type: UPDATE_DEFAULT_LANGUAGE, payload: defaultLanguage});
+        }catch(err){
             console.log(`setDefaultLanguage error `, err);
+            Tts.requestInstallData()
+        }
+        try{
+            Tts.setDefaultPitch(speechPitch);
+            dispatch({type: UPDATE_SPEECH_PITCH, payload: speechPitch});
+        }catch(err){
+            console.log(`setDefaultPitch error `, err);
+        }
+        try{
+            Tts.setDefaultRate(speechRate);
+            dispatch({type: UPDATE_SPEECH_RATE, payload: speechRate});
+        }catch(err){
+            console.log(`setDefaultRate error `, err);
         }
         try{
             await Tts.setDefaultVoice(selectedVoice);
-            dispatch({type: UPDATE_VOICES, payload: availableVoices})
+            dispatch({type: UPDATE_SELECTED_VOICE, payload: selectedVoice});
+            Tts.speak(text);
+            dispatch(updateReadText(false));
         }catch(err){
             console.log(`setDefaultVoice error `, err);
         }
-        // setVoices(availableVoices);
-        // setTtsStatus('initialized');
-        dispatch({type: UPDATE_TTS_STATUS, payload: ttsStatus})
-        
-    }else {
-        // setTtsStatus('initialized');
-        dispatch({type: UPDATE_TTS_STATUS, payload: ttsStatus})
-        }
-      };
-
-    const readText = async() => {
-
-        console.log("inside tts useeffect");
-            Tts.stop();
-            try{
-                await Tts.setDefaultLanguage(defaultLanguage);
-                dispatch({type: UPDATE_DEFAULT_LANGUAGE, payload: defaultLanguage});
-            }catch(err){
-                console.log(`setDefaultLanguage error `, err);
-            }
-            try{
-                Tts.setDefaultPitch(speechPitch);
-                dispatch({type: UPDATE_SPEECH_PITCH, payload: speechPitch});
-            }catch(err){
-                console.log(`setDefaultPitch error `, err);
-            }
-            try{
-                Tts.setDefaultRate(speechRate);
-                dispatch({type: UPDATE_SPEECH_RATE, payload: speechRate});
-            }catch(err){
-                console.log(`setDefaultRate error `, err);
-            }
-            try{
-                await Tts.setDefaultVoice(selectedVoice);
-                dispatch({type: UPDATE_SELECTED_VOICE, payload: selectedVoice});
-            }catch(err){
-                console.log(`setDefaultVoice error `, err);
-            }
-            Tts.speak(text);
-            dispatch({
-                type: UPDATE_READ_TEXT,
-                payload: false
-            })
     }
     
     useEffect(()=>{
         readText()
-    },[selectedVoice,text, speechPitch, speechRate])
+    },[selectedVoice, text, speechPitch, speechRate, props.isSpeechCancelled, props.readText])
 
     return (
         <>

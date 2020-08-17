@@ -11,13 +11,24 @@ import {
 } from 'react-native';
 import Tts from 'react-native-tts';
 import Slider from '@react-native-community/slider';
-import { useSelector, useDispatch, memo} from 'react-redux';
-// import store from '../redux/store';
+import { useSelector, useDispatch } from 'react-redux';
 import TextToSpeech from '../components/modules/textToSpeech';
-import { UPDATE_SELECTED_VOICE, UPDATE_DEFAULT_LANGUAGE, UPDATE_VOICES, UPDATE_READ_TEXT, UPDATE_SPEECH_PITCH, UPDATE_SPEECH_RATE } from '../redux/constants';
+import { GET_VOICES, FINISHED, CANCELLED } from '../redux/constants'; 
+import { 
+  updateVoices, 
+  updateDefaultLanguage, 
+  updateSelectedVoice, 
+  updateReadText, 
+  updateSpeechRate, 
+  updateSpeechPitch, 
+  updateTtsStatus,
+  updateIsPaused,
+  updateBackGroundSpeech} from '../redux/action';
+// import RNSpeech from '../components/modules/reactNativeSpeech';
 
 const TestApp = () => {
   console.log("Inside TestApp");
+
     const ttsStore = useSelector(store=> store);
     const dispatch = useDispatch();
 
@@ -25,19 +36,23 @@ const TestApp = () => {
     const [selectedVoice, setSelectedVoice] = useState(ttsStore.selectedVoice);
     const [speechRate, setSpeechRate] = useState(ttsStore.speechRate);
     const [speechPitch, setSpeechPitch] = useState(ttsStore.speechPitch);
-    const [text, setText] = useState("Hey John. Please deliver the package by 6:00 PM");
+    const [text, setText] = useState("Hey John. Please deliver the package before 6:00 PM but make sure you're driving within the speed limit");
     const [defaultLanguage, setDefaultLanguage] = useState(null);
-    // const [ttsStatus, setTtsStatus] = useState(ttsStore.ttsStatus);
+    const [ttsStatus, setTtsStatus] = useState(ttsStore.ttsStatus);
     const [readText, setReadText] = useState(ttsStore.readText);
-    console.log(readText);
+    const [isInternetRequired, setIsInternetRequired] = useState(ttsStore.isInternetRequired);
+    const [isSpeechCancelled, setIsSpeechCancelled] = useState(ttsStore.isSpeechCancelled);
+    const [isBackGroundSpeechCancelled, setIsBackGroundSpeechCancelled] = useState(ttsStore.isBackGroundSpeechCancelled);
     
     const onVoicePress = voice => {
             setDefaultLanguage(voice.language);
-            dispatch({type: UPDATE_DEFAULT_LANGUAGE, payload: voices.language});
+            dispatch(updateDefaultLanguage(voice.language))
+
             setSelectedVoice(voice.id );
-            dispatch({type: UPDATE_SELECTED_VOICE, payload: voice.id});
+            dispatch(updateSelectedVoice(voice.id));
+
             setReadText(false);
-            dispatch({type:UPDATE_READ_TEXT,payload:false})
+            dispatch(updateReadText(false));
     };
 
     const renderVoiceItem = ({ item }) => {
@@ -51,62 +66,54 @@ const TestApp = () => {
     };
 
     const setTtsSpeechRate = async rate => {
-        // await Tts.setDefaultRate( rate );
+        await Tts.setDefaultRate( rate );
         setSpeechRate( rate );
-        dispatch({
-            type: UPDATE_SPEECH_RATE,
-            payload: rate
-        })
+        dispatch(updateSpeechRate(rate));
     };
 
     const setTtsSpeechPitch = async rate => {
-        // await Tts.setDefaultPitch(rate);
+        await Tts.setDefaultPitch(rate);
         setSpeechPitch( rate );
-        dispatch({
-            type: UPDATE_SPEECH_PITCH,
-            payload: rate
-        })
+        dispatch(updateSpeechPitch(rate));
     };
-
-    // { ...selectedVoice,voices,text,speechPitch,speechRate }
-
-    const initTts = async () => {
-      const ttsVoices = await Tts.voices();
-      const availableVoices = ttsVoices
-          .filter(v => !v.networkConnectionRequired && !v.notInstalled)
-          .map(v => {
-          return { id: v.id, name: v.name, language: v.language };
-          });
-      setVoices(availableVoices); 
-      console.log("Display total voices supported by tts library");
-      console.log(ttsVoices);
-      dispatch({type: UPDATE_VOICES, payload: availableVoices})
-    }
-
+    
     const readTextToSpeech = () =>{
       setReadText(true);
-      dispatch({type: UPDATE_READ_TEXT, payload: true})
+      dispatch(updateReadText(true));
     } 
 
+    const cancelSpeech = () => {
+      setIsSpeechCancelled(!isSpeechCancelled);
+      dispatch(updateTtsStatus(CANCELLED));
+}
+
+    const cancelBackgroundSpeech = () => {
+      setIsBackGroundSpeechCancelled(!isBackGroundSpeechCancelled);
+      dispatch(updateBackGroundSpeech(!ttsStore.isBackGroundSpeechCancelled))
+    }
+
     useEffect(()=>{
-        Tts.getInitStatus().then(initTts);
+      setVoices(ttsStore.voices)
+    },[ttsStore.voices])
+
+    useEffect(()=>{
+      dispatch({type: GET_VOICES})
     },[])
 
     useEffect(()=>{
-      if(ttsStore.ttsStatus === 'finished'){
+      if(ttsStore.ttsStatus === FINISHED || ttsStore.ttsStatus === CANCELLED ){
         setReadText(false)
       }
-
     },[ttsStore.ttsStatus])
 
     const textToSpeechProps = {
       selectedVoice,
-      voices,
       text,
       defaultLanguage,
-      speechPitch: ttsStore.speechPitch,
-      speechRate: ttsStore.speechRate,
-      ttsStatus: ttsStore.ttsStatus
+      speechPitch,
+      speechRate,
+      isSpeechCancelled,
+      readText
     }
 
     return (
@@ -151,7 +158,14 @@ const TestApp = () => {
             <Text>
                 Click to Read Text ({`Status: ${ttsStore.ttsStatus || ''}`})
                 {readText ? <TextToSpeech {...textToSpeechProps}/>: null}
+                {/* <TextToSpeech {...textToSpeechProps}/> */}
             </Text>
+            </TouchableOpacity>
+            <TouchableOpacity style={styles.button} onPress={cancelSpeech}>
+              {isSpeechCancelled ? <Text>Allow Speech</Text>: <Text>Cancel Speech</Text>}
+            </TouchableOpacity>
+            <TouchableOpacity style={styles.button} onPress={cancelBackgroundSpeech}>
+              {isBackGroundSpeechCancelled ? <Text>Allow BG Speech</Text> : <Text>Disable BG Speech</Text>}
             </TouchableOpacity>
             <Text style={styles.sliderLabel}>Select the Voice from below</Text>
             <FlatList
@@ -161,6 +175,7 @@ const TestApp = () => {
             extraData={selectedVoice}
             data={voices}
             />
+            {/* <RNSpeech/> */}
         </View>
     )
 };
