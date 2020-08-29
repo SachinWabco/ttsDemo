@@ -5,7 +5,8 @@ import { voices } from './awsLang';
 const awsPolly = () => {
     console.log("Inside AWS Polly")
 
-    const URL = 'https://njcgfu0rb5.execute-api.ap-south-1.amazonaws.com/NewStage/';
+    const URL = 'https://15fkr9pzj6.execute-api.ap-south-1.amazonaws.com/test';
+   
     let audioURL = "";
 
     const [selectedVoice, setSelectedVoice] = useState("");
@@ -15,15 +16,26 @@ const awsPolly = () => {
         setSelectedVoice(item.voice)
     }
 
-    let params = {
+    let apiData = {
         text,
-        selectedVoice
+        selectedVoice,
+        outputFormat: "mp3"
     }
 
-    const callApi = async (URL, params) => {
+    const callApi = async (URL, apiData) => {
         return new Promise((resolve,reject)=> {
-            fetch(URL, params)
-            .then(res = res.json())
+            const headers = new Headers({
+                "Content-Type": "application/json"
+            })
+
+            const config = {
+                body : JSON.stringify(apiData),
+                method: "POST",
+                headers
+            }
+
+            fetch(URL, config)
+            .then(res => res.json())
             .then(data => resolve(data))
             .catch(err => reject(err))
         })
@@ -31,7 +43,9 @@ const awsPolly = () => {
 
     const callPolly = async () => {
         try{
-            const audioURL = await callApi(URL, params)
+            const audioURL = await callApi(URL, apiData)
+            console.log("hi")
+            console.log(audioURL)
             //ToDo
             //Play audio using react-native-sound
         }catch(err){
