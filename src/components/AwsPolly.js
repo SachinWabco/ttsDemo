@@ -1,11 +1,13 @@
 import React, { useState } from 'react';
 import { FlatList, StyleSheet, TouchableOpacity, Text, TextInput, View, Keyboard, Button } from 'react-native';
 import { voices } from './awsLang';
+// import axios from 'axios';
+import Sound from 'react-native-sound';
 
 const awsPolly = () => {
     console.log("Inside AWS Polly")
 
-    const URL = 'https://15fkr9pzj6.execute-api.ap-south-1.amazonaws.com/test';
+    const URL = 'https://15fkr9pzj6.execute-api.ap-south-1.amazonaws.com/test/';
    
     let audioURL = "";
 
@@ -17,7 +19,7 @@ const awsPolly = () => {
     }
 
     let apiData = {
-        text,
+        textMessage: text,
         selectedVoice,
         outputFormat: "mp3"
     }
@@ -35,7 +37,15 @@ const awsPolly = () => {
             }
 
             fetch(URL, config)
-            .then(res => res.json())
+            // axios.post(URL, config)
+            // .then(res => res.body.data)
+            .then(response => {
+                if (response.ok) {
+                    return response.json();
+                } else {
+                    throw Error("network request failed!!");
+                }
+              })
             .then(data => resolve(data))
             .catch(err => reject(err))
         })
@@ -43,9 +53,21 @@ const awsPolly = () => {
 
     const callPolly = async () => {
         try{
-            const audioURL = await callApi(URL, apiData)
-            console.log("hi")
-            console.log(audioURL)
+            const response = await callApi(URL, apiData);
+            console.log(response.audioURL);
+            const sound = new Sound(response.audioURL,
+            undefined,
+            error => {
+              if (error) {
+                console.log(error)
+              } else {
+                console.log("Playing sound");
+                sound.play(() => {
+                  // Release when it's done so we're not using up resources
+                  sound.release();
+                });
+              }
+            });
             //ToDo
             //Play audio using react-native-sound
         }catch(err){
@@ -75,7 +97,7 @@ const awsPolly = () => {
                 onSubmitEditing={Keyboard.dismiss}
             />
             <TouchableOpacity style={styles.button} onPress={callPolly}>
-              <Text>Play Voice</Text>
+                <Text>Play Voice</Text>
             </TouchableOpacity>
 
             <FlatList
